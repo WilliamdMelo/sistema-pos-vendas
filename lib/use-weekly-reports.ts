@@ -92,10 +92,29 @@ export function useWeeklyReports() {
     return { ok: true as const };
   }
 
+  async function deleteReport(id: string) {
+    if (supabase) {
+      const result = await supabase.from("weekly_reports").delete().eq("id", id);
+
+      if (result.error) {
+        return { ok: false as const, message: "Falha ao excluir no Supabase." };
+      }
+
+      setReports((current) => current.filter((item) => item.id !== id));
+      return { ok: true as const };
+    }
+
+    const next = reports.filter((item) => item.id !== id);
+    setReports(next);
+    window.localStorage.setItem(storageKey, JSON.stringify(next));
+    return { ok: true as const };
+  }
+
   return {
     reports,
     source,
     loading,
     saveReport,
+    deleteReport,
   };
 }
