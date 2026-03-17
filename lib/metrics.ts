@@ -1,5 +1,5 @@
 import { calculateBusinessMinutes } from "@/lib/time";
-import type { RiskClient, Ticket, TicketMessage } from "@/lib/types";
+import type { TicketMessage, WeeklyReport } from "@/lib/types";
 
 function average(values: number[]) {
   if (!values.length) {
@@ -9,90 +9,98 @@ function average(values: number[]) {
   return Math.round(values.reduce((sum, value) => sum + value, 0) / values.length);
 }
 
-export function getDashboardMetrics(
-  tickets: Ticket[],
-  messages: TicketMessage[],
-  riskClients: RiskClient[],
-) {
-  const responseTimes = tickets
-    .map((ticket) => {
-      const orderedMessages = messages
-        .filter((message) => message.ticket_id === ticket.id)
-        .sort(
-          (a, b) =>
-            new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
-        );
+function toDate(date: string, time: string) {
+  return new Date(`${date}T${time}:00`);
+}
 
-      const firstClientMessage = orderedMessages.find(
-        (message) => message.sender === "cliente",
-      );
-      const firstSupportMessage = orderedMessages.find(
-        (message) => message.sender !== "cliente",
-      );
+function getMessagesForTicket(report: WeeklyReport, chamadoId: string) {
+  return report.mensagens_chamado
+    .filter((message) => message.chamado_id === chamadoId)
+    .sort(
+      (a, b) =>
+        toDate(a.data_mensagem, a.hora_mensagem).getTime() -
+        toDate(b.data_mensagem, b.hora_mensagem).getTime(),
+    );
+}
 
-      if (!firstClientMessage || !firstSupportMessage) {
-        return null;
-      }
+function getResponseMinutes(messages: TicketMessage[]) {
+  const clientMessage = messages.find((message) => message.tipo_mensagem === "cliente");
+  const supportMessage = messages.find((message) => message.tipo_mensagem === "suporte");
 
-      return calculateBusinessMinutes(
-        new Date(firstClientMessage.timestamp),
-        new Date(firstSupportMessage.timestamp),
-      );
-    })
-    .filter((value): value is number => value !== null);
+  if (!clientMessage || !supportMessage) {
+    return 0;
+  }
 
-  const resolutionTimes = tickets
-    .filter((ticket) => ticket.resolved_at)
+  return calculateBusinessMinutes(
+    toDate(clientMessage.data_mensagem, clientMessage.hora_mensagem),
+    toDate(supportMessage.data_mensagem, supportMessage.hora_mensagem),
+  );
+}
+
+export function getLatestReport(reports: WeeklyReport[]) {
+  return [...reports].sort(
+    (a, b) =>
+      new Date(b.meeting_info.data_reuniao).getTime() -
+      new Date(a.meeting_info.data_reuniao).getTime(),
+  )[0] ?? null;
+}
+
+export function getDashboardMetrics(report: WeeklyReport | null) {
+  if (!report) {
+    return {
+      openTickets: 0,
+      closedTickets: 0,
+      outOfSla: 0,
+      averageResponse: 0,
+      averageResolution: 0,
+      riskClients: 0,
+      postInstallContacts: 0,
+    };
+  }
+
+  const resolutionTimes = report.chamados
+    .filter((ticket) => ticket.data_resolucao && ticket.hora_resolucao)
     .map((ticket) =>
       calculateBusinessMinutes(
-        new Date(ticket.opened_at),
-        new Date(ticket.resolved_at!),
+        toDate(ticket.data_abertura, ticket.hora_abertura),
+        toDate(ticket.data_resolucao, ticket.hora_resolucao),
       ),
     );
 
+  const responseTimes = report.chamados.map((ticket) =>
+    getResponseMinutes(getMessagesForTicket(report, ticket.id)),
+  );
+
   return {
-    openTickets: tickets.filter((ticket) => ticket.status !== "fechado").length,
-    closedTickets: tickets.filter((ticket) => ticket.status === "fechado").length,
-    averageResponse: average(responseTimes),
-    averageResolution: average(resolutionTimes),
-    riskClients: riskClients.length,
+    openTickets: report.chamados.filter((ticket) => ticket.status !== "resolvido").length,
+    closedTickets: report.chamados.filter((ticket) => ticket.status === "resolvido").length,
+    outOfSla: report.indicators.chamados_fora_sla,
+    averageResponse:
+      report.indicators.tempo_medio_resposta || average(responseTimes),
+    averageResolution:
+      report.indicators.tempo_medio_resolucao || average(resolutionTimes),
+    riskClients: report.clientes_risco.length,
+    postInstallContacts: report.indicators.clientes_contatados_pos_instalacao,
   };
 }
 
-export function buildResponseChartData(
-  tickets: Ticket[],
-  messages: TicketMessage[],
-) {
-  return tickets.map((ticket) => {
-    const orderedMessages = messages
-      .filter((message) => message.ticket_id === ticket.id)
-      .sort(
-        (a, b) =>
-          new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
-      );
+export function buildResponseChartData(report: WeeklyReport | null) {
+  if (!report) {
+    return [];
+  }
 
-    const firstClientMessage = orderedMessages.find(
-      (message) => message.sender === "cliente",
-    );
-    const firstSupportMessage = orderedMessages.find(
-      (message) => message.sender !== "cliente",
-    );
-
-    return {
-      name: ticket.project,
-      resposta:
-        firstClientMessage && firstSupportMessage
-          ? calculateBusinessMinutes(
-              new Date(firstClientMessage.timestamp),
-              new Date(firstSupportMessage.timestamp),
-            )
-          : 0,
-    };
-  });
+  return report.chamados.map((ticket) => ({
+    name: ticket.projeto_ou_painel,
+    resposta: getResponseMinutes(getMessagesForTicket(report, ticket.id)),
+  }));
 }
 
-export function buildStatusChartData(tickets: Ticket[]) {
-  const counts = tickets.reduce<Record<string, number>>((acc, ticket) => {
+export function buildStatusChartData(report: WeeklyReport | null) {
+  if (!report) {
+    return [];
+  }
+
+  const counts = report.chamados.reduce<Record<string, number>>((acc, ticket) => {
     acc[ticket.status] = (acc[ticket.status] ?? 0) + 1;
     return acc;
   }, {});
@@ -100,9 +108,13 @@ export function buildStatusChartData(tickets: Ticket[]) {
   return Object.entries(counts).map(([name, chamados]) => ({ name, chamados }));
 }
 
-export function buildProblemChartData(tickets: Ticket[]) {
-  const counts = tickets.reduce<Record<string, number>>((acc, ticket) => {
-    acc[ticket.problem_type] = (acc[ticket.problem_type] ?? 0) + 1;
+export function buildProblemChartData(report: WeeklyReport | null) {
+  if (!report) {
+    return [];
+  }
+
+  const counts = report.chamados.reduce<Record<string, number>>((acc, ticket) => {
+    acc[ticket.descricao_problema] = (acc[ticket.descricao_problema] ?? 0) + 1;
     return acc;
   }, {});
 

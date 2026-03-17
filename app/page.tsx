@@ -1,5 +1,5 @@
-import { DashboardScreen } from "@/components/dashboard-screen";
+import { SummaryScreen } from "@/components/summary-screen";
 
 export default function HomePage() {
-  return <DashboardScreen />;
+  return <SummaryScreen />;
 }

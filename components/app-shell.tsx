@@ -6,8 +6,6 @@ import {
   BarChart3,
   BellDot,
   LayoutDashboard,
-  ShieldAlert,
-  Ticket,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -15,9 +13,7 @@ import { cn } from "@/lib/utils";
 const navigation = [
   { href: "/", label: "Resumo", icon: LayoutDashboard },
   { href: "/dashboard", label: "Dashboard", icon: BarChart3 },
-  { href: "/chamados", label: "Chamados", icon: Ticket },
   { href: "/relatorios", label: "Relatorios", icon: BellDot },
-  { href: "/clientes-risco", label: "Clientes em risco", icon: ShieldAlert },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -36,7 +32,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               Operacao, risco e relatorios em uma tela.
             </h1>
             <p className="mt-3 text-sm leading-6 text-slate-300">
-              Painel completo para acompanhar chamados, clientes sensiveis e ritmo de entrega semanal.
+              Painel completo para acompanhar o resumo executivo, os indicadores e a ata semanal de pos-vendas.
             </p>
           </div>
 
@@ -72,7 +68,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </p>
             <div className="mt-3 space-y-3 text-sm text-slate-300">
               <p>
-                Relatorios consolidados com foco em tempo de resposta, resolucao e contas em risco.
+                Relatorios consolidados servem como fonte unica para o resumo e o dashboard.
               </p>
               <p className="rounded-2xl bg-white/10 px-3 py-2 text-white">
                 Paleta: <span className="font-medium">#0A2A66</span> e{" "}
