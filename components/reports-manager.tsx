@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
-import { ArrowLeft, Eye, Pencil, Save } from "lucide-react";
+import { ArrowLeft, Eye, Pencil, Save, Trash2 } from "lucide-react";
 
 import { getLatestReport } from "@/lib/metrics";
 import { useWeeklyReports } from "@/lib/use-weekly-reports";
@@ -230,7 +230,7 @@ function ReportViewer({ report, onBack }: { report: WeeklyReport; onBack: () => 
 }
 
 export function ReportsManager() {
-  const { reports, saveReport, loading } = useWeeklyReports();
+  const { reports, saveReport, deleteReport, loading } = useWeeklyReports();
   const [screenMode, setScreenMode] = useState<ScreenMode>("list");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
@@ -248,6 +248,21 @@ export function ReportsManager() {
   function startRename(report: WeeklyReport) {
     setRenamingId(report.id);
     setRenameValue(report.meeting_info.empresa);
+  }
+
+  async function handleDelete(report: WeeklyReport) {
+    const result = await deleteReport(report.id);
+    if (!result.ok) {
+      setMessage(result.message);
+      return;
+    }
+
+    if (selectedId === report.id) {
+      setSelectedId(null);
+      setScreenMode("list");
+    }
+
+    setMessage("Relatorio excluido com sucesso.");
   }
 
   async function handleRename(event: FormEvent<HTMLFormElement>, report: WeeklyReport) {
@@ -361,7 +376,15 @@ export function ReportsManager() {
                     className="inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
                   >
                     <Pencil className="h-4 w-4" />
-                    Renomear
+                    Editar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleDelete(report)}
+                    className="inline-flex items-center gap-2 rounded-full border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Excluir
                   </button>
                 </div>
               </>
